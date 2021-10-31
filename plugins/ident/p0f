@@ -157,6 +157,8 @@ Version 2 code heavily based upon the p0fq.pl included with the p0f distribution
 
 2012 - Matt Simerson - refactored, added v3 support
 
+2021 - Ben Peddell - fixed IPv6 parsing in v3 support
+
 =cut
 
 use strict;
@@ -165,6 +167,8 @@ use warnings;
 use Qpsmtpd::Constants;
 use IO::Socket;
 use Net::IP;
+use Socket qw{ inet_aton };
+use Socket6 qw{ inet_pton };
 
 my $QUERY_MAGIC_V2 = 0x0defaced;
 my $QUERY_MAGIC_V3 = 0x50304601;
@@ -303,14 +307,16 @@ sub get_v3_query {
     };
 
     if ($src_ip =~ /:/) {    # IPv6
-        my @bits = split(/\:/, $src_ip);
+        my $ip = inet_pton(AF_INET6, $src_ip);
         return
-          pack("L C C C C C C C C C C C C C C C C C",
-               $QUERY_MAGIC_V3, 0x06, @bits);
+          pack("L C a16",
+               $QUERY_MAGIC_V3, 0x06, $ip);
+    } else {
+        my $ip = inet_aton($src_ip);
+        return
+          pack("L C a16",
+               $QUERY_MAGIC_V3, 0x04, $ip);
     }
-
-    my @octets = split(/\./, $src_ip);
-    return pack("L C C16", $QUERY_MAGIC_V3, 0x04, @octets);
 }
 
 sub query_p0f_v3 {
